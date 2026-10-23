@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UA CHAT</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#050507;color:#fff;font-family:Arial,sans-serif}
+#lock{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#050507}
+.card{width:90%;max-width:380px;padding:28px;border:1px solid #f14;border-radius:20px;text-align:center;box-shadow:0 0 30px #f144}
+.neon{color:#ff1744;text-shadow:0 0 12px #f14}.logo{font-size:38px;font-weight:bold}
+input{width:100%;padding:14px;margin:7px 0;background:#111;color:white;border:1px solid #52202a;border-radius:12px;outline:0}
+button{cursor:pointer}.btn{width:100%;padding:14px;margin-top:8px;background:#ff1744;color:#fff;border:0;border-radius:12px;font-weight:bold}
+.err{height:20px;color:#ff7189;font-size:13px;margin-top:7px}
+#app{display:none;height:100vh}.top{height:60px;padding:0 15px;display:flex;align-items:center;border-bottom:1px solid #301018}.top b{font-size:23px}.top span{margin-left:auto;color:#aaa}
+.layout{display:flex;height:calc(100vh - 60px)}.users{width:330px;max-width:100%;padding:12px;border-right:1px solid #301018;overflow:auto}
+.setup{padding:5px 0 15px;border-bottom:1px solid #301018;margin-bottom:10px}.setup h3{margin:5px 0}
+.person{padding:12px;margin:6px 0;background:#0d0d12;border-radius:14px;cursor:pointer;border:1px solid transparent}
+.person:hover,.person.active{border-color:#ff1744;box-shadow:0 0 12px #f144}
+.avatar{display:inline-flex;width:40px;height:40px;border:1px solid #f14;border-radius:50%;align-items:center;justify-content:center;color:#f14;margin-right:10px;font-weight:bold}
+.chat{flex:1;display:flex;flex-direction:column}.chathead{padding:15px;border-bottom:1px solid #301018;font-weight:bold}
+.messages{flex:1;overflow:auto;padding:18px;background:#070709}.msg{max-width:75%;padding:10px 13px;margin:7px 0;border-radius:15px}.me{margin-left:auto;background:#ff1744}.them{background:#15151b;border:1px solid #301820}.empty{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;color:#666}
+.compose{display:flex;gap:7px;padding:10px;border-top:1px solid #301018}.compose input{margin:0}.send{width:55px;background:#ff1744;color:white;border:0;border-radius:12px}
+@media(max-width:650px){.users{width:100%;border:0}.chat{display:none}.layout.chatopen .users{display:none}.layout.chatopen .chat{display:flex}}
+</style>
+</head>
+<body>
+<div id="lock"><div class="card">
+<div class="logo neon">UA CHAT</div><p style="color:#aaa">Private neon chat</p>
+<input id="password" type="password" placeholder="Enter password">
+<button id="openBtn" class="btn">OPEN CHAT</button><div id="lockErr" class="err"></div>
+</div></div>
+
+<div id="app">
+<div class="top"><b class="neon">UA CHAT</b><span id="meLabel"></span></div>
+<div class="layout" id="layout">
+<section class="users">
+<div class="setup">
+<h3>My Profile</h3>
+<input id="myName" placeholder="Enter your name">
+<button id="saveBtn" class="btn" type="button">SAVE PROFILE</button>
+<div id="saveStatus" class="err"></div>
+</div>
+<input id="search" placeholder="Search name..." style="margin-bottom:8px">
+<div id="userList"></div>
+</section>
+<section class="chat">
+<div class="chathead" id="chatTitle">Select a profile</div>
+<div class="messages" id="messages"><div class="empty">Select a profile to start chatting.</div></div>
+<div class="compose"><input id="message" placeholder="Type a message..."><button id="sendBtn" class="send">➤</button></div>
+</section>
+</div></div>
+
+<script>
+const PASS="445589";
+let db={me:null,users:[],messages:{}},selected=null;
+try{const x=localStorage.getItem("ua_chat_db");if(x)db=JSON.parse(x)}catch(e){}
+if(!db||typeof db!=="object")db={me:null,users:[],messages:{}};
+if(!Array.isArray(db.users))db.users=[];
+if(!db.messages||typeof db.messages!=="object")db.messages={};
+
+const $=id=>document.getElementById(id);
+function persist(){localStorage.setItem("ua_chat_db",JSON.stringify(db));}
+
+function openChat(){
+ if($("password").value===PASS){
+  $("lock").style.display="none";$("app").style.display="block";loadProfile();renderUsers();
+ }else $("lockErr").textContent="Wrong password";
+}
+function loadProfile(){
+ if(db.me&&db.me.name){$("myName").value=db.me.name;$("meLabel").textContent=db.me.name}
+}
+function saveProfile(){
+ const name=$("myName").value.trim();
+ if(!name){$("saveStatus").textContent="Enter your name first";return}
+ db.me={name:name};
+ if(!db.users.some(u=>u.name.toLowerCase()===name.toLowerCase()))db.users.unshift({name:name});
+ persist();
+ $("meLabel").textContent=name;
+ $("saveStatus").textContent="Saved ✓";
+ renderUsers();
+}
+function renderUsers(){
+ const q=$("search").value.trim().toLowerCase(),box=$("userList");box.innerHTML="";
+ db.users.filter(u=>u.name.toLowerCase().includes(q)).forEach(u=>{
+  const d=document.createElement("div");d.className="person"+(selected&&selected.name===u.name?" active":"");
+  const a=document.createElement("span");a.className="avatar";a.textContent=u.name[0].toUpperCase();
+  const b=document.createElement("b");b.textContent=u.name;
+  d.append(a,b);d.onclick=()=>selectUser(u);box.appendChild(d);
+ });
+}
+function selectUser(u){
+ selected=u;$("layout").classList.add("chatopen");$("chatTitle").textContent=u.name;renderUsers();renderMessages();
+}
+function chatKey(){return (db.me?db.me.name:"guest")+"__"+selected.name}
+function renderMessages(){
+ const box=$("messages");box.innerHTML="";
+ if(!selected){box.innerHTML='<div class="empty">Select a profile to start chatting.</div>';return}
+ const arr=db.messages[chatKey()]||[];
+ if(!arr.length){box.innerHTML='<div class="empty">No messages yet.<br>Start the conversation.</div>';return}
+ arr.forEach(m=>{const d=document.createElement("div");d.className="msg "+(m.from==="me"?"me":"them");d.textContent=m.text;box.appendChild(d)});
+ box.scrollTop=box.scrollHeight;
+}
+function send(){
+ if(!db.me){alert("Save your profile first.");return}
+ if(!selected){alert("Select a profile first.");return}
+ const t=$("message").value.trim();if(!t)return;
+ const k=chatKey();if(!db.messages[k])db.messages[k]=[];
+ db.messages[k].push({from:"me",text:t});persist();$("message").value="";renderMessages();
+}
+
+$("openBtn").onclick=openChat;
+$("saveBtn").onclick=saveProfile;
+$("sendBtn").onclick=send;
+$("password").onkeydown=e=>{if(e.key==="Enter")openChat()};
+$("myName").onkeydown=e=>{if(e.key==="Enter")saveProfile()};
+$("message").onkeydown=e=>{if(e.key==="Enter")send()};
+$("search").oninput=renderUsers;
+</script>
+</body>
+</html>
